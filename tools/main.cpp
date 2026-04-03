@@ -324,7 +324,8 @@ static void runREPL(const Options& opts) {
     std::cout << dim("Workers: ") << opts.workers
               << dim("  Opt: O") << opts.optLevel << "\n\n";
 
-    runtime::VM vm(8*1024*1024, opts.workers);
+    auto fpp_vm = std::make_unique<runtime::VM>(8*1024*1024, opts.workers);
+    runtime::VM& vm = *fpp_vm;
     if (!opts.noStdlib) stdlib::registerAll(vm);
 
     int    optLevel = opts.optLevel;
@@ -447,7 +448,8 @@ static void runREPL(const Options& opts) {
 
         if (stripped == ":help") { printReplHelp(); continue; }
         if (stripped == ":reset") {
-            vm = runtime::VM(8*1024*1024, opts.workers);
+            fpp_vm = std::make_unique<runtime::VM>(8*1024*1024, opts.workers);
+            runtime::VM& vm = *fpp_vm;
             if (!opts.noStdlib) stdlib::registerAll(vm);
             sessionDefs.clear();
             std::cout << green("✓ VM reset\n");

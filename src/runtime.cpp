@@ -859,7 +859,7 @@ ValueRef VM::execute(const ir::IRModule& mod, const std::string& entryFn) {
     // Find entry
     const ir::IRFunction* entry = nullptr;
     for (auto& fn : mod.functions) if (fn.name == entryFn || fn.mangledName == entryFn) { entry = &fn; break; }
-    if (!entry) throw std::runtime_error("Entry function not found: " + entryFn);
+    if (!entry) throw std::runtime_error(std::string("Entry function not found: ") + entryFn);
     return execFunction(*entry, {});
 }
 
@@ -1484,7 +1484,7 @@ ValueRef VM::eval(const std::string& source) {
     Parser parser(std::move(toks), "<eval>");
     auto mod = parser.parse();
     if (!parser.errors().empty()) {
-        throw std::runtime_error("Parse error: " + parser.errors()[0].what());
+        throw std::runtime_error(std::string("Parse error: ") + parser.errors()[0].what());
     }
     types::TypeRegistry reg;
     types::SemanticAnalyser sem(reg);

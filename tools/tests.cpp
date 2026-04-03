@@ -50,13 +50,13 @@ struct TestResult {
 static std::vector<TestResult> g_results;
 static int g_total = 0, g_passed = 0, g_failed = 0;
 
-#define TEST(name, body) \
+#define TEST(name, ...) \
     do { \
         ++g_total; \
         auto _t0 = std::chrono::steady_clock::now(); \
         bool _ok = false; \
         std::string _msg; \
-        try { body; _ok = true; } \
+        try { [&]{ __VA_ARGS__; }(); _ok = true; } \
         catch (std::exception& _e) { _msg = _e.what(); } \
         catch (...) { _msg = "unknown exception"; } \
         double _ms = std::chrono::duration<double,std::milli>( \
@@ -70,8 +70,7 @@ static int g_total = 0, g_passed = 0, g_failed = 0;
         auto _a = (a); auto _b = (b); \
         if (!(_a == _b)) { \
             std::ostringstream _ss; \
-            _ss << "Expected " << #a << " == " << #b \
-                << " but got: " << _a << " vs " << _b; \
+            _ss << "EXPECT_EQ failed: " #a " vs " #b ": " << _a << " != " << _b; \
             throw std::runtime_error(_ss.str()); \
         } \
     } while(0)
@@ -96,7 +95,7 @@ static runtime::ValueRef runSource(const std::string& src, int opt = 1) {
     Parser parser(toks, "<test>");
     auto mod = parser.parse();
     if (!parser.errors().empty())
-        throw std::runtime_error("Parse: " + parser.errors()[0].what());
+        throw std::runtime_error(std::string("Parse: ") + parser.errors()[0].what());
     types::TypeRegistry reg;
     types::SemanticAnalyser sem(reg);
     sem.analyse(mod);

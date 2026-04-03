@@ -1032,7 +1032,8 @@ public:
         };
 
         for (auto& blk : fn.blocks) {
-            for (auto& inst : blk.insts) {
+            for (size_t _ii = 0; _ii < blk.insts.size(); ++_ii) {
+                auto& inst = blk.insts[_ii];
                 bool pure = inst.dest != REG_NONE &&
                     inst.op != Opcode::Load && inst.op != Opcode::Call &&
                     inst.op != Opcode::Alloc && inst.op != Opcode::Intrinsic &&
@@ -1044,12 +1045,13 @@ public:
                 if (it != valueTable.end() && it->second != inst.dest) {
                     // Replace inst with copy of existing value number's register
                     RegId existing = it->second;
-                    inst.op = Opcode::Select;
                     RegId c = fn.nextReg++;
                     Instruction ci; ci.op=Opcode::ConstBool; ci.dest=c; ci.immInt=1; ci.type={types::TY_BOOL}; fn.regTypes[c]=ci.type;
-                    blk.insts.insert((blk.insts.begin() + (std::ptrdiff_t)_ii), ci);
-                    inst.operands = {c, existing, existing};
-                    regVN[inst.dest] = key;
+                    blk.insts.insert(blk.insts.begin() + (std::ptrdiff_t)_ii, ci);
+                    ++_ii; // skip past the inserted ConstBool
+                    blk.insts[_ii].op = Opcode::Select;
+                    blk.insts[_ii].operands = {c, existing, existing};
+                    regVN[blk.insts[_ii].dest] = key;
                     changed = true;
                 } else {
                     valueTable[key] = inst.dest;

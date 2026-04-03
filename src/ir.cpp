@@ -914,9 +914,9 @@ public:
 
                 // x * 1 → x,  x * 0 → 0,  x + 0 → x,  x - 0 → x
                 if (inst.op == Opcode::Mul) {
-                    if (rc && rv == 1)  { inst.op = Opcode::Select; RegId c=fn.nextReg++; Instruction ci; ci.op=Opcode::ConstBool; ci.dest=c; ci.immInt=1; ci.type={types::TY_BOOL}; fn.regTypes[c]=ci.type; blk.insts.insert(std::find(blk.insts.begin(),blk.insts.end(),inst),ci); inst.operands={c,l,l}; changed=true; }
+                    if (rc && rv == 1)  { inst.op = Opcode::Select; RegId c=fn.nextReg++; Instruction ci; ci.op=Opcode::ConstBool; ci.dest=c; ci.immInt=1; ci.type={types::TY_BOOL}; fn.regTypes[c]=ci.type; blk.insts.insert((blk.insts.begin() + (std::ptrdiff_t)_ii),ci); inst.operands={c,l,l}; changed=true; }
                     else if (rc && rv == 0) { inst.op = Opcode::ConstInt; inst.immInt = 0; inst.operands.clear(); changed = true; }
-                    else if (lc && lv == 1) { inst.op = Opcode::Select; RegId c=fn.nextReg++; Instruction ci; ci.op=Opcode::ConstBool; ci.dest=c; ci.immInt=1; ci.type={types::TY_BOOL}; fn.regTypes[c]=ci.type; blk.insts.insert(std::find(blk.insts.begin(),blk.insts.end(),inst),ci); inst.operands={c,r,r}; changed=true; }
+                    else if (lc && lv == 1) { inst.op = Opcode::Select; RegId c=fn.nextReg++; Instruction ci; ci.op=Opcode::ConstBool; ci.dest=c; ci.immInt=1; ci.type={types::TY_BOOL}; fn.regTypes[c]=ci.type; blk.insts.insert((blk.insts.begin() + (std::ptrdiff_t)_ii),ci); inst.operands={c,r,r}; changed=true; }
                     else if (lc && lv == 0) { inst.op = Opcode::ConstInt; inst.immInt = 0; inst.operands.clear(); changed = true; }
                     // x * 2^n → x << n
                     else if (rc && rv > 0 && (rv & (rv-1)) == 0) {
@@ -924,7 +924,7 @@ public:
                         RegId shiftReg = fn.nextReg++;
                         Instruction ci; ci.op = Opcode::ConstInt; ci.dest = shiftReg;
                         ci.immInt = shift; ci.type = inst.type; fn.regTypes[shiftReg] = ci.type;
-                        blk.insts.insert(std::find(blk.insts.begin(),blk.insts.end(),inst), ci);
+                        blk.insts.insert((blk.insts.begin() + (std::ptrdiff_t)_ii), ci);
                         inst.op = Opcode::Shl; inst.operands = {l, shiftReg};
                         constInts[shiftReg] = shift;
                         changed = true;
@@ -936,7 +936,7 @@ public:
                     RegId shiftReg = fn.nextReg++;
                     Instruction ci; ci.op = Opcode::ConstInt; ci.dest = shiftReg;
                     ci.immInt = shift; ci.type = inst.type; fn.regTypes[shiftReg] = ci.type;
-                    blk.insts.insert(std::find(blk.insts.begin(),blk.insts.end(),inst), ci);
+                    blk.insts.insert((blk.insts.begin() + (std::ptrdiff_t)_ii), ci);
                     inst.op = Opcode::Shr; inst.operands = {l, shiftReg};
                     changed = true;
                 }
@@ -945,7 +945,7 @@ public:
                     RegId maskReg = fn.nextReg++;
                     Instruction ci; ci.op = Opcode::ConstInt; ci.dest = maskReg;
                     ci.immInt = rv - 1; ci.type = inst.type; fn.regTypes[maskReg] = ci.type;
-                    blk.insts.insert(std::find(blk.insts.begin(),blk.insts.end(),inst), ci);
+                    blk.insts.insert((blk.insts.begin() + (std::ptrdiff_t)_ii), ci);
                     inst.op = Opcode::BitAnd; inst.operands = {l, maskReg};
                     changed = true;
                 }
@@ -953,7 +953,7 @@ public:
                 if ((inst.op == Opcode::Add || inst.op == Opcode::Sub ||
                      inst.op == Opcode::BitOr || inst.op == Opcode::BitXor) && rc && rv == 0) {
                     RegId c = fn.nextReg++; Instruction ci; ci.op=Opcode::ConstBool; ci.dest=c; ci.immInt=1; ci.type={types::TY_BOOL}; fn.regTypes[c]=ci.type;
-                    blk.insts.insert(std::find(blk.insts.begin(),blk.insts.end(),inst),ci);
+                    blk.insts.insert((blk.insts.begin() + (std::ptrdiff_t)_ii),ci);
                     inst.op = Opcode::Select; inst.operands = {c, l, l}; changed = true;
                 }
             }
@@ -987,7 +987,7 @@ public:
                         inst.op = Opcode::ConstInt; inst.immInt = 0; inst.operands.clear(); changed = true;
                     } else if (inst.op == Opcode::BitAnd || inst.op == Opcode::BitOr) {
                         RegId c = fn.nextReg++; Instruction ci; ci.op=Opcode::ConstBool; ci.dest=c; ci.immInt=1; ci.type={types::TY_BOOL}; fn.regTypes[c]=ci.type;
-                        blk.insts.insert(std::find(blk.insts.begin(),blk.insts.end(),inst),ci);
+                        blk.insts.insert((blk.insts.begin() + (std::ptrdiff_t)_ii),ci);
                         inst.op = Opcode::Select; inst.operands={c,l,l}; changed=true;
                     }
                 }
@@ -1047,7 +1047,7 @@ public:
                     inst.op = Opcode::Select;
                     RegId c = fn.nextReg++;
                     Instruction ci; ci.op=Opcode::ConstBool; ci.dest=c; ci.immInt=1; ci.type={types::TY_BOOL}; fn.regTypes[c]=ci.type;
-                    blk.insts.insert(std::find(blk.insts.begin(),blk.insts.end(),inst), ci);
+                    blk.insts.insert((blk.insts.begin() + (std::ptrdiff_t)_ii), ci);
                     inst.operands = {c, existing, existing};
                     regVN[inst.dest] = key;
                     changed = true;

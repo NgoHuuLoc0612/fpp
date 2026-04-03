@@ -334,7 +334,7 @@ static void runREPL(const Options& opts) {
     std::vector<std::string> buf;
 
     auto compile_and_run = [&](const std::string& input) {
-        std::string defs = "";
+        std::string defs;
         for (auto& d : sessionDefs) defs += d + "\n";
 
         // Try wrapping as main expression
@@ -460,20 +460,22 @@ static void runREPL(const Options& opts) {
             } catch (...) { std::cerr << red("Usage: :opt <0-3>\n"); }
             continue;
         }
+        // FIX: Removed invalid Python-style string.join() syntax.
+        // :ir command — build source from session defs + lastInput
         if (stripped == ":ir") {
             if (!lastInput.empty()) {
-                std::string src = "\n".join([]{return "";}()) +
-                    (sessionDefs.empty() ? "" : [&]{std::string s; for(auto&d:sessionDefs)s+=d+"\n"; return s;}()) +
-                    "\nfn main() {\n" + lastInput + "\n}";
-                // build src
                 std::string dsrc;
                 for (auto& d : sessionDefs) dsrc += d + "\n";
                 dsrc += "\nfn main() {\n" + lastInput + "\n}";
-                Lexer lx(dsrc, "<ir>"); auto toks = lx.tokenize();
-                Parser p(toks, "<ir>"); auto mod = p.parse();
-                types::TypeRegistry r; types::SemanticAnalyser s(r); s.analyse(mod);
-                codegen::CodeGenerator cg(r, s); auto irm = cg.generate(mod);
-                std::cout << dim(ir::dumpModule(irm));
+                try {
+                    Lexer lx(dsrc, "<ir>"); auto toks = lx.tokenize();
+                    Parser p(toks, "<ir>"); auto mod = p.parse();
+                    types::TypeRegistry r; types::SemanticAnalyser s(r); s.analyse(mod);
+                    codegen::CodeGenerator cg(r, s); auto irm = cg.generate(mod);
+                    std::cout << dim(ir::dumpModule(irm));
+                } catch (std::exception& e) {
+                    std::cerr << red("error: ") << e.what() << "\n";
+                }
             }
             continue;
         }
@@ -481,12 +483,16 @@ static void runREPL(const Options& opts) {
             std::string dsrc;
             for (auto& d : sessionDefs) dsrc += d + "\n";
             dsrc += "\nfn main() {\n" + lastInput + "\n}";
-            Lexer lx(dsrc,"<cpp>"); auto toks=lx.tokenize();
-            Parser p(toks,"<cpp>"); auto mod=p.parse();
-            types::TypeRegistry r; types::SemanticAnalyser s(r); s.analyse(mod);
-            codegen::CodeGenerator cg(r, s); auto irm=cg.generate(mod);
-            codegen::CppTranspileBackend back;
-            std::cout << back.transpile(irm) << "\n";
+            try {
+                Lexer lx(dsrc,"<cpp>"); auto toks=lx.tokenize();
+                Parser p(toks,"<cpp>"); auto mod=p.parse();
+                types::TypeRegistry r; types::SemanticAnalyser s(r); s.analyse(mod);
+                codegen::CodeGenerator cg(r, s); auto irm=cg.generate(mod);
+                codegen::CppTranspileBackend back;
+                std::cout << back.transpile(irm) << "\n";
+            } catch (std::exception& e) {
+                std::cerr << red("error: ") << e.what() << "\n";
+            }
             continue;
         }
         if (stripped == ":clear") { sessionDefs.clear(); std::cout << green("✓ Defs cleared\n"); continue; }

@@ -98,6 +98,30 @@ struct Type {
     size_t alignBytes = 1;
     // Pointer mutability
     bool isMut = false;
+
+    // Explicit copy operations (needed because unique_ptr<FnSig> disables implicit copy)
+    Type() = default;
+    Type(Type&&) = default;
+    Type& operator=(Type&&) = default;
+    Type(const Type& o)
+        : id(o.id), kind(o.kind), name(o.name), fields(o.fields)
+        , params(o.params), args(o.args), inner(o.inner)
+        , elems(o.elems), elemTy(o.elemTy), arrayLen(o.arrayLen)
+        , traits(o.traits), sizeBytes(o.sizeBytes), alignBytes(o.alignBytes)
+        , isMut(o.isMut)
+    {
+        if (o.sig) sig = std::make_unique<FnSig>(*o.sig);
+    }
+    Type& operator=(const Type& o) {
+        if (this == &o) return *this;
+        id = o.id; kind = o.kind; name = o.name; fields = o.fields;
+        params = o.params; args = o.args; inner = o.inner;
+        elems = o.elems; elemTy = o.elemTy; arrayLen = o.arrayLen;
+        traits = o.traits; sizeBytes = o.sizeBytes; alignBytes = o.alignBytes;
+        isMut = o.isMut;
+        sig = o.sig ? std::make_unique<FnSig>(*o.sig) : nullptr;
+        return *this;
+    }
 };
 
 // ─── Symbol Table ──────────────────────────────────────────────────────────

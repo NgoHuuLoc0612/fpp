@@ -296,8 +296,25 @@ TypeId TypeRegistry::instantiate(TypeId generic, const std::vector<TypeId>& args
     for (size_t i = 0; i < gt->params.size() && i < args.size(); ++i)
         subst[gt->params[i].name] = args[i];
 
-    // Deep-copy and substitute the generic type
-    Type inst = *gt;
+    // Deep-copy and substitute the generic type (can't copy unique_ptr<FnSig> directly)
+    Type inst;
+    inst.id        = gt->id;
+    inst.kind      = gt->kind;
+    inst.name      = gt->name;
+    inst.fields    = gt->fields;
+    inst.params    = gt->params;
+    inst.args      = gt->args;
+    inst.inner     = gt->inner;
+    inst.elems     = gt->elems;
+    inst.elemTy    = gt->elemTy;
+    inst.arrayLen  = gt->arrayLen;
+    inst.traits    = gt->traits;
+    inst.sizeBytes = gt->sizeBytes;
+    inst.alignBytes= gt->alignBytes;
+    inst.isMut     = gt->isMut;
+    if (gt->sig) {
+        inst.sig = std::make_unique<FnSig>(*gt->sig);
+    }
     inst.args   = args;
     inst.params.clear(); // fully instantiated — no free type params
 

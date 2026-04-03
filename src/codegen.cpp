@@ -1,4 +1,5 @@
 #include "../include/codegen.hpp"
+#include <fstream>
 #include <sstream>
 #include <cassert>
 #include <algorithm>
@@ -242,21 +243,19 @@ void CodeGenerator::genFn(const ast::FnItem& fn) {
     builder_->endFunction();
 }
 
-void CodeGenerator::genStruct(const ast::StructItem& s) {
-    // Register struct type info — no IR emitted
-}
+void CodeGenerator::genStruct(const ast::StructItem& s) { (void)s; }
 
-void CodeGenerator::genEnum(const ast::EnumItem& e) {
-    // Register enum type info
-}
+void CodeGenerator::genEnum(const ast::EnumItem& e) { (void)e; }
 
 void CodeGenerator::genImpl(const ast::ImplItem& impl) {
+    (void)impl;
     env_.pushScope();
     for (auto& m : impl.members) genStmt(*m);
     env_.popScope();
 }
 
 void CodeGenerator::genClass(const ast::ClassItem& cls) {
+    (void)cls;
     env_.pushScope();
     for (auto& m : cls.members) genStmt(*m);
     env_.popScope();
@@ -843,9 +842,9 @@ ir::RegId CodeGenerator::genClosure(const ast::ClosureExpr& e) {
         for (auto& stmt : e.body) scanStmt(*stmt);
     }
 
-    // Save current builder context
-    ir::FuncId parentFuncId = builder_->currentFunc();
-    ir::BlockId parentBlockId = builder_->currentBlock();
+    // Save current builder context (used after nested function emission)
+    ir::FuncId  parentFuncId  = builder_->currentFunc();  (void)parentFuncId;
+    ir::BlockId parentBlockId = builder_->currentBlock(); (void)parentBlockId;
 
     // Build the lifted function: params = closure_params + captured_params
     std::vector<ir::IRParam> liftedParams;
@@ -1101,7 +1100,7 @@ ir::BlockId CodeGenerator::genPattern(const ast::Pattern& pat, ir::RegId scrutin
                                        ir::IRType scrutineeTy, ir::BlockId failBlock) {
     if (dynamic_cast<const ast::WildcardPat*>(&pat)) return failBlock;
     if (auto* lp = dynamic_cast<const ast::LiteralPat*>(&pat)) {
-        ir::RegId lit = genLiteral(ast::LiteralExpr{lp->loc, lp->tok});
+        ir::RegId lit = [&]() -> ir::RegId { ast::LiteralExpr tmp; tmp.loc = lp->loc; tmp.tok = lp->tok; return genLiteral(tmp); }();
         ir::RegId eq  = builder_->emitBinop(ir::Opcode::Eq, scrutinee, lit, {types::TY_BOOL});
         ir::BlockId matchBlock = builder_->createBlock("pat.match");
         builder_->emitBranch(eq, matchBlock, failBlock);
@@ -1132,11 +1131,10 @@ void CodeGenerator::genPatternBindings(const ast::Pattern& pat, ir::RegId scruti
 // ─── C++ transpiler backend ───────────────────────────────────────────────────
 bool CppTranspileBackend::emit(const ir::IRModule& mod, const std::string& outPath, OutputFormat) {
     std::string code = transpile(mod);
-    FILE* f = fopen(outPath.c_str(), "w");
-    if (!f) return false;
-    fwrite(code.data(), 1, code.size(), f);
-    fclose(f);
-    return true;
+    std::ofstream f(outPath, std::ios::out);
+    if (!f.is_open()) return false;
+    f.write(code.data(), (std::streamsize)code.size());
+    return f.good();
 }
 
 std::string CppTranspileBackend::irTypeToCpp(const ir::IRType& ty) {
@@ -1215,11 +1213,10 @@ std::string CppTranspileBackend::emitInst(const ir::Instruction& inst, const ir:
 
 bool BytecodeBackend::emit(const ir::IRModule& mod, const std::string& outPath, OutputFormat) {
     auto bytes = compile(mod);
-    FILE* f = fopen(outPath.c_str(), "wb");
-    if (!f) return false;
-    fwrite(bytes.data(), 1, bytes.size(), f);
-    fclose(f);
-    return true;
+    std::ofstream f(outPath, std::ios::out | std::ios::binary);
+    if (!f.is_open()) return false;
+    f.write(reinterpret_cast<const char*>(bytes.data()), (std::streamsize)bytes.size());
+    return f.good();
 }
 
 std::vector<uint8_t> BytecodeBackend::compile(const ir::IRModule& mod) {

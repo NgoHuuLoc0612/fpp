@@ -15,7 +15,30 @@ endif()
 
 # ─── Compiler flags ───────────────────────────────────────────────────────────
 if(MSVC)
-    set(FPP_CXX_FLAGS /W4 /WX- /O2 /permissive-)
+    set(FPP_CXX_FLAGS
+        /W3 /WX-
+        /O2
+        /permissive-
+        /std:c++20
+        /Zc:__cplusplus
+        /D_USE_MATH_DEFINES
+        /DNOMINMAX
+        /D_CRT_SECURE_NO_WARNINGS
+        /D_SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
+        /wd4100   # unreferenced formal parameter
+        /wd4189   # local variable initialized but not referenced
+        /wd4267   # size_t conversion
+        /wd4244   # possible loss of data
+        /wd4456   # declaration hides previous local
+        /wd4458   # declaration hides class member
+        /wd4996   # deprecated function
+        /wd4702   # unreachable code
+        /wd4127   # conditional expression is constant
+        /wd4018   # signed/unsigned mismatch
+        /wd4245   # conversion signed/unsigned mismatch
+        /wd4389   # signed/unsigned mismatch ==
+        /bigobj   # large object file
+    )
 else()
     set(FPP_CXX_FLAGS
         -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers

@@ -1,12 +1,26 @@
 // F++ Standard Library
 // All stdlib modules registered as native functions into the VM
 
+#ifdef _WIN32
+#  ifndef _USE_MATH_DEFINES
+#    define _USE_MATH_DEFINES
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  define _CRT_SECURE_NO_WARNINGS
+#endif
 #include "../include/runtime.hpp"
 #include <algorithm>
 #include <numeric>
 #include <random>
 #include <chrono>
 #include <filesystem>
+#ifdef _WIN32
+#  include <direct.h>
+#else
+#  include <unistd.h>
+#endif
 #include <fstream>
 #include <sstream>
 #include <regex>
@@ -394,29 +408,38 @@ static std::unordered_map<std::string, VR> makeMathModule() {
     m["F64_MAX"] = V::makeF64(std::numeric_limits<double>::max());
     m["F64_EPSILON"] = V::makeF64(std::numeric_limits<double>::epsilon());
 
-    auto mathFn1 = [](auto fn) {
+    // Use typed function pointers to avoid MSVC overload deduction issues
+    using MathFn1 = double(*)(double);
+    using MathFn2 = double(*)(double,double);
+    auto mathFn1 = [](MathFn1 fn) -> VR {
         return V::makeNative([fn](std::vector<VR> a, VM&) -> VR { return V::makeF64(fn(toD(a[0]))); });
     };
-    auto mathFn2 = [](auto fn) {
+    auto mathFn2 = [](MathFn2 fn) -> VR {
         return V::makeNative([fn](std::vector<VR> a, VM&) -> VR { return V::makeF64(fn(toD(a[0]), toD(a[1]))); });
     };
 
-    m["sin"]    = mathFn1(::sin);    m["cos"]    = mathFn1(::cos);
-    m["tan"]    = mathFn1(::tan);    m["asin"]   = mathFn1(::asin);
-    m["acos"]   = mathFn1(::acos);   m["atan"]   = mathFn1(::atan);
-    m["atan2"]  = mathFn2(::atan2);  m["sinh"]   = mathFn1(::sinh);
-    m["cosh"]   = mathFn1(::cosh);   m["tanh"]   = mathFn1(::tanh);
-    m["exp"]    = mathFn1(::exp);    m["exp2"]   = mathFn1(::exp2);
-    m["log"]    = mathFn1(::log);    m["log2"]   = mathFn1(::log2);
-    m["log10"]  = mathFn1(::log10);  m["sqrt"]   = mathFn1(::sqrt);
-    m["cbrt"]   = mathFn1(::cbrt);   m["pow"]    = mathFn2(::pow);
-    m["abs"]    = mathFn1(::fabs);   m["ceil"]   = mathFn1(::ceil);
-    m["floor"]  = mathFn1(::floor);  m["round"]  = mathFn1(::round);
-    m["trunc"]  = mathFn1(::trunc);  m["fmod"]   = mathFn2(::fmod);
-    m["hypot"]  = mathFn2(::hypot);  m["ldexp"]  = mathFn2(::ldexp);
-    m["erf"]    = mathFn1(::erf);    m["erfc"]   = mathFn1(::erfc);
-    m["lgamma"] = mathFn1(::lgamma); m["tgamma"] = mathFn1(::tgamma);
-    m["j0"]     = mathFn1(::j0);     m["j1"]     = mathFn1(::j1);
+    m["sin"]    = mathFn1((MathFn1)::sin);    m["cos"]    = mathFn1((MathFn1)::cos);
+    m["tan"]    = mathFn1((MathFn1)::tan);    m["asin"]   = mathFn1((MathFn1)::asin);
+    m["acos"]   = mathFn1((MathFn1)::acos);   m["atan"]   = mathFn1((MathFn1)::atan);
+    m["atan2"]  = mathFn2((MathFn2)::atan2);  m["sinh"]   = mathFn1((MathFn1)::sinh);
+    m["cosh"]   = mathFn1((MathFn1)::cosh);   m["tanh"]   = mathFn1((MathFn1)::tanh);
+    m["exp"]    = mathFn1((MathFn1)::exp);    m["exp2"]   = mathFn1((MathFn1)::exp2);
+    m["log"]    = mathFn1((MathFn1)::log);    m["log2"]   = mathFn1((MathFn1)::log2);
+    m["log10"]  = mathFn1((MathFn1)::log10);  m["sqrt"]   = mathFn1((MathFn1)::sqrt);
+    m["cbrt"]   = mathFn1((MathFn1)::cbrt);   m["pow"]    = mathFn2((MathFn2)::pow);
+    m["abs"]    = mathFn1((MathFn1)::fabs);   m["ceil"]   = mathFn1((MathFn1)::ceil);
+    m["floor"]  = mathFn1((MathFn1)::floor);  m["round"]  = mathFn1((MathFn1)::round);
+    m["trunc"]  = mathFn1((MathFn1)::trunc);  m["fmod"]   = mathFn2((MathFn2)::fmod);
+    m["hypot"]  = mathFn2((MathFn2)::hypot);  m["ldexp"]  = mathFn2((MathFn2)::ldexp);
+    m["erf"]    = mathFn1((MathFn1)::erf);    m["erfc"]   = mathFn1((MathFn1)::erfc);
+    m["lgamma"] = mathFn1((MathFn1)::lgamma); m["tgamma"] = mathFn1((MathFn1)::tgamma);
+#if !defined(_WIN32)
+    m["j0"]     = mathFn1((MathFn1)::j0);     m["j1"]     = mathFn1((MathFn1)::j1);
+#else
+    // j0/j1 (Bessel functions) not available on MSVC; provide fallback
+    m["j0"]     = V::makeNative([](std::vector<VR> a, VM&) -> VR { return V::makeF64(std::cyl_bessel_j(0.0, toD(a[0]))); });
+    m["j1"]     = V::makeNative([](std::vector<VR> a, VM&) -> VR { return V::makeF64(std::cyl_bessel_j(1.0, toD(a[0]))); });
+#endif
 
     m["clamp"] = V::makeNative([](std::vector<VR> a, VM&) -> VR {
         double v = toD(a[0]), lo = toD(a[1]), hi = toD(a[2]);
@@ -449,7 +472,7 @@ static std::unordered_map<std::string, VR> makeMathModule() {
             if (n % i == 0) return V::makeBool(false);
         return V::makeBool(true);
     });
-    m["next_prime"] = V::makeNative([](std::vector<VR> a, VM& vm) -> VR {
+    m["next_prime"] = V::makeNative([](std::vector<VR> a, VM& /*vm*/) -> VR {
         int64_t n = toI(a[0]) + 1;
         while (true) {
             bool prime = n >= 2;
@@ -765,7 +788,15 @@ static std::unordered_map<std::string, VR> makeEnvModule() {
     std::unordered_map<std::string, VR> m;
     m["get"] = V::makeNative([](std::vector<VR> args, VM&) -> VR {
         if (args.empty() || !args[0]->strData) return V::makeNone();
+#ifdef _WIN32
+        char* val_buf = nullptr;
+        size_t val_sz = 0;
+        _dupenv_s(&val_buf, &val_sz, args[0]->strData->c_str());
+        std::unique_ptr<char, decltype(&free)> _guard(val_buf, free);
+        const char* val = val_buf;
+#else
         const char* val = std::getenv(args[0]->strData->c_str());
+#endif
         return val ? V::makeSome(V::makeString(val)) : V::makeNone();
     });
     m["set"] = V::makeNative([](std::vector<VR> args, VM&) -> VR {
@@ -773,7 +804,7 @@ static std::unordered_map<std::string, VR> makeEnvModule() {
 #ifdef _WIN32
         _putenv_s(args[0]->strData->c_str(), args[1]->strData->c_str());
 #else
-        setenv(args[0]->strData->c_str(), args[1]->strData->c_str(), 1);
+        ::setenv(args[0]->strData->c_str(), args[1]->strData->c_str(), 1);
 #endif
         return nil();
     });

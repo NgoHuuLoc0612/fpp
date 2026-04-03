@@ -1,4 +1,15 @@
+#ifdef _WIN32
+#  ifndef _USE_MATH_DEFINES
+#    define _USE_MATH_DEFINES
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  define _CRT_SECURE_NO_WARNINGS
+#endif
 #include <pybind11/pybind11.h>
+#include <stdexcept>
+#include <string>
 #include <pybind11/stl.h>
 #include <pybind11/functional.h>
 #include <pybind11/complex.h>
@@ -9,9 +20,12 @@
 #include "../include/ir.hpp"
 #include "../include/codegen.hpp"
 #include "../include/runtime.hpp"
-#include "../stdlib/stdlib.cpp"
+// stdlib is linked from fpp_core
 
 namespace py = pybind11;
+
+// Forward declaration — defined in stdlib/stdlib.cpp
+namespace fpp { namespace stdlib { void registerAll(runtime::VM& vm); } }
 using namespace fpp;
 
 // ─── Python-facing Value conversion ──────────────────────────────────────────
@@ -190,7 +204,7 @@ public:
             Parser parser(std::move(toks), "<run>");
             auto mod = parser.parse();
             if (!parser.errors().empty()) {
-                throw std::runtime_error("Parse errors: " + parser.errors()[0].what());
+                throw std::runtime_error(std::string("Parse errors: ") + parser.errors()[0].what());
             }
             types::TypeRegistry reg;
             types::SemanticAnalyser sem(reg);
@@ -201,9 +215,9 @@ public:
             auto result = vm_->execute(irMod);
             return valueToPy(result);
         } catch (runtime::FppException& e) {
-            throw py::value_error("F++ exception: " + e.message);
+            throw std::invalid_argument(std::string("F++ exception: ") + e.message);
         } catch (std::exception& e) {
-            throw py::runtime_error(e.what());
+            throw std::runtime_error(e.what());
         }
     }
 
@@ -215,7 +229,7 @@ public:
             Parser parser(std::move(toks), "<run>");
             auto mod = parser.parse();
             if (!parser.errors().empty())
-                throw std::runtime_error("Parse errors: " + parser.errors()[0].what());
+                throw std::runtime_error(std::string("Parse errors: ") + parser.errors()[0].what());
             types::TypeRegistry reg;
             types::SemanticAnalyser sem(reg);
             sem.analyse(mod);
@@ -228,7 +242,7 @@ public:
             default: ir::OptPipeline::makeO2().run(irMod); break;
             }
             return valueToPy(vm_->execute(irMod));
-        } catch (std::exception& e) { throw py::runtime_error(e.what()); }
+        } catch (std::exception& e) { throw std::runtime_error(e.what()); }
     }
 
     // Transpile F++ source to C++
@@ -238,7 +252,7 @@ public:
         Parser parser(std::move(toks), "<trans>");
         auto mod = parser.parse();
         if (!parser.errors().empty())
-            throw py::runtime_error("Parse error: " + parser.errors()[0].what());
+            throw std::runtime_error(std::string("Parse error: ") + parser.errors()[0].what());
         types::TypeRegistry reg;
         types::SemanticAnalyser sem(reg);
         sem.analyse(mod);
@@ -255,7 +269,7 @@ public:
         Parser parser(std::move(toks), "<ir>");
         auto mod = parser.parse();
         if (!parser.errors().empty())
-            throw py::runtime_error("Parse error: " + parser.errors()[0].what());
+            throw std::runtime_error(std::string("Parse error: ") + parser.errors()[0].what());
         types::TypeRegistry reg;
         types::SemanticAnalyser sem(reg);
         sem.analyse(mod);

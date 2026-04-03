@@ -229,7 +229,7 @@ int Value::compare(const Value& o) const {
     auto toD = [](const Value& v) {
         switch (v.kind) {
         case ValueKind::I32: return (double)v.prim.i32; case ValueKind::I64: return (double)v.prim.i64;
-        case ValueKind::U64: return (double)v.prim.u64; case ValueKind::F64: return v.prim.f64;
+        case ValueKind::U64: return static_cast<double>(v.prim.u64); case ValueKind::F64: return v.prim.f64;
         default: return 0.0;
         }
     };
@@ -318,6 +318,14 @@ void TaskScheduler::runMainLoop() {
     }
 }
 
+static void fpp_aligned_free(void* ptr) {
+#ifdef _WIN32
+    _aligned_free(ptr);
+#else
+    ::free(ptr);
+#endif
+}
+
 // ─── GCHeap ───────────────────────────────────────────────────────────────────
 GCHeap::GCHeap(size_t initialBytes) : total_(initialBytes), gcThreshold_(initialBytes / 2) {}
 GCHeap::~GCHeap() {
@@ -328,9 +336,11 @@ void* GCHeap::alloc(size_t bytes, size_t align) {
     if (used_.load() + bytes > gcThreshold_) gcMinor();
     void* ptr = nullptr;
 #ifdef _WIN32
-    ptr = _aligned_malloc(bytes, align);
-#else
+    ptr = _aligned_malloc(bytes, std::max(align, (size_t)sizeof(void*)));
+#elif defined(__APPLE__) || defined(__linux__)
     if (posix_memalign(&ptr, std::max(align, sizeof(void*)), bytes) != 0) ptr = nullptr;
+#else
+    ptr = std::malloc(bytes);
 #endif
     if (!ptr) throw std::bad_alloc();
     std::memset(ptr, 0, bytes);
@@ -347,7 +357,7 @@ void GCHeap::free(void* ptr) {
     for (auto it = blocks_.begin(); it != blocks_.end(); ++it) {
         if (it->ptr == ptr) {
             used_ -= it->size;
-            ::free(ptr);
+            fpp_aligned_free(ptr);
             blocks_.erase(it);
             return;
         }
@@ -449,7 +459,7 @@ void GCHeap::gcMinor() {
         size_t sz = blocks_[i].size;
         for (size_t offset = 0; offset + sizeof(void*) <= sz; offset += sizeof(void*)) {
             void* candidate = nullptr;
-            std::memcpy(&candidate, mem + offset, sizeof(void*));
+            std::memcpy(&candidate, mem + (std::ptrdiff_t)offset, sizeof(void*));
             if (!candidate) continue;
             for (size_t j = youngStart; j < blocks_.size(); ++j) {
                 const char* bstart = reinterpret_cast<const char*>(blocks_[j].ptr);
@@ -495,7 +505,6 @@ void VM::printErr(const std::string& s) { if (stderrFn_) stderrFn_(s); }
 std::string VM::readLine()              { return stdinFn_ ? stdinFn_() : ""; }
 
 void VM::throwException(ValueRef v) { pendingException_ = std::move(v); }
-bool VM::hasException() const       { return pendingException_.has_value(); }
 ValueRef VM::takeException()        { auto v = *pendingException_; pendingException_.reset(); return v; }
 
 CallFrame& VM::topFrame()       { return callStack_.back(); }
@@ -799,29 +808,29 @@ ValueRef VM::execute(const ir::IRModule& mod, const std::string& entryFn) {
             switch (g.type.typeId) {
             case types::TY_BOOL: {
                 bool b = false;
-                std::memcpy(&b, g.initializer.data(), std::min(g.initializer.size(), sizeof(b)));
+                std::memcpy(&b, g.initializer.data(), std::min(g.initializer.size(), (size_t)sizeof(b)));
                 val = Value::makeBool(b); break;
             }
             case types::TY_I8: case types::TY_I16: case types::TY_I32: case types::TY_I64:
             case types::TY_ISIZE: {
                 int64_t v = 0;
-                std::memcpy(&v, g.initializer.data(), std::min(g.initializer.size(), sizeof(v)));
+                std::memcpy(&v, g.initializer.data(), std::min(g.initializer.size(), (size_t)sizeof(v)));
                 val = Value::makeI64(v); break;
             }
             case types::TY_U8: case types::TY_U16: case types::TY_U32: case types::TY_U64:
             case types::TY_USIZE: {
                 uint64_t v = 0;
-                std::memcpy(&v, g.initializer.data(), std::min(g.initializer.size(), sizeof(v)));
+                std::memcpy(&v, g.initializer.data(), std::min(g.initializer.size(), (size_t)sizeof(v)));
                 val = Value::makeU64(v); break;
             }
             case types::TY_F32: {
                 float v = 0;
-                std::memcpy(&v, g.initializer.data(), std::min(g.initializer.size(), sizeof(v)));
+                std::memcpy(&v, g.initializer.data(), std::min(g.initializer.size(), (size_t)sizeof(v)));
                 val = Value::makeF64((double)v); break;
             }
             case types::TY_F64: {
                 double v = 0;
-                std::memcpy(&v, g.initializer.data(), std::min(g.initializer.size(), sizeof(v)));
+                std::memcpy(&v, g.initializer.data(), std::min(g.initializer.size(), (size_t)sizeof(v)));
                 val = Value::makeF64(v); break;
             }
             case types::TY_STR: {
@@ -1125,7 +1134,7 @@ ValueRef VM::execInst(const ir::Instruction& inst, const ir::IRFunction& fn,
         // ── Generator / yield ────────────────────────────────────────────────
         if (iname == "__yield") {
             // Yield is implemented as storing the value and marking the frame
-            if (!args.empty()) topFrame().returnVal = args[0];
+            if (!args.empty()) callStack_.back().returnVal = args[0];
             // In a coroutine context this would suspend; here we record it
             setR(inst.dest, Value::makeNil());
             break;
@@ -1152,7 +1161,7 @@ ValueRef VM::execInst(const ir::Instruction& inst, const ir::IRFunction& fn,
                     }
                 }
                 // Look up method in registered classes
-                for (auto& [cname, cls] : classes_) {
+                for (auto& clsEntry : classes_) { auto& cls = clsEntry.second;
                     auto mit = cls.methodTable.find(methodName);
                     if (mit != cls.methodTable.end()) {
                         auto& mfn = mit->second;
@@ -1317,9 +1326,10 @@ ValueRef VM::execInst(const ir::Instruction& inst, const ir::IRFunction& fn,
         auto fn_val = getR(inst.operands[0]);
         std::vector<ValueRef> args;
         for (size_t i = 1; i < inst.operands.size(); ++i) args.push_back(getR(inst.operands[i]));
-        auto future = scheduler_->spawn([fn_val, args, this]() mutable -> ValueRef {
+        auto spawnArgs = args; // copy to avoid shadowing
+        auto future = scheduler_->spawn([fn_val, spawnArgs, this]() mutable -> ValueRef {
             if (fn_val->kind == ValueKind::NativeFunc && fn_val->nativeFn)
-                return fn_val->nativeFn(args, *this);
+                return fn_val->nativeFn(spawnArgs, *this);
             return Value::makeNil();
         });
         auto fv = std::make_shared<Value>(); fv->kind = ValueKind::Future;
@@ -1456,8 +1466,8 @@ ValueRef VM::applyCast(ir::Opcode op, ValueRef val, types::TypeId targetTy) {
     else if (val->kind == ValueKind::I64) { d = (double)val->prim.i64; i = val->prim.i64; }
     else if (val->kind == ValueKind::I32) { d = val->prim.i32; i = val->prim.i32; }
     switch (targetTy) {
-    case types::TY_I8:  { auto v = Value::makeI64((int8_t)i);  v->kind = ValueKind::I8;  return v; }
-    case types::TY_I16: { auto v = Value::makeI64((int16_t)i); v->kind = ValueKind::I16; return v; }
+    case types::TY_I8:  { auto vi = Value::makeI64(i); vi->kind = ValueKind::I8; vi->prim.i8 = static_cast<int8_t>(i); return vi; }
+    case types::TY_I16: { auto vi = Value::makeI64(i); vi->kind = ValueKind::I16; vi->prim.i16 = static_cast<int16_t>(i); return vi; }
     case types::TY_I32: return Value::makeI32((int32_t)i);
     case types::TY_I64: return Value::makeI64(i);
     case types::TY_U64: return Value::makeU64((uint64_t)i);
@@ -1485,6 +1495,7 @@ ValueRef VM::eval(const std::string& source) {
     return execute(irMod, "main");
 }
 
+
+
 } // namespace runtime
 } // namespace fpp
-

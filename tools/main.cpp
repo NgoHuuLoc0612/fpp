@@ -1,6 +1,16 @@
 // F++ Standalone Interpreter — main.cpp
 // Enterprise-grade CLI entry point
 
+#ifdef _WIN32
+#  ifndef _USE_MATH_DEFINES
+#    define _USE_MATH_DEFINES
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "../include/lexer.hpp"
 #include "../include/parser.hpp"
 #include "../include/types.hpp"
@@ -59,13 +69,16 @@ static std::string magenta(const std::string& s) { return ansi("35", s); }
 
 static size_t termWidth() {
 #ifdef _WIN32
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    return csbi.srWindow.Right - csbi.srWindow.Left + 1;
-#else
+    CONSOLE_SCREEN_BUFFER_INFO csbi{};
+    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+        return (size_t)(csbi.srWindow.Right - csbi.srWindow.Left + 1);
+    return 80;
+#elif defined(TIOCGWINSZ)
     struct winsize w{};
-    ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
-    return w.ws_col > 0 ? w.ws_col : 80;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0 && w.ws_col > 0) return w.ws_col;
+    return 80;
+#else
+    return 80;
 #endif
 }
 

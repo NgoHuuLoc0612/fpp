@@ -166,11 +166,11 @@ Token Lexer::lexNumber() {
         else if (next == 'b' || next == 'B') { base = 2;  advance(); advance(); }
     }
 
-    auto isDigit = [&](char c) {
-        if (base == 16) return std::isxdigit(c);
+    auto isDigit = [&](char c) -> bool {
+        if (base == 16) return std::isxdigit((unsigned char)c) != 0;
         if (base == 8)  return c >= '0' && c <= '7';
         if (base == 2)  return c == '0' || c == '1';
-        return std::isdigit(c);
+        return std::isdigit((unsigned char)c) != 0;
     };
 
     while (pos_ < src_.size() && (isDigit(src_[pos_]) || src_[pos_] == '_'))
@@ -477,9 +477,12 @@ Token Lexer::nextToken() {
     if (c == '"') return lexString('"');
     if (c == '\'') {
         // Could be char literal or lifetime 'a
-        if (pos_+2 < src_.size() && std::isalpha(src_[pos_+1]) && src_[pos_+2] != '\'')
-            ; // treat as lifetime (ident) — fall through to operator
-        return lexChar();
+        // Check for lifetime annotation 'a — fall through to operator handling if so
+        if (pos_+2 < src_.size() && std::isalpha(src_[pos_+1]) && src_[pos_+2] != '\'') {
+            // Lifetime syntax: treat the apostrophe as an operator token
+        } else {
+            return lexChar();
+        }
     }
     if (c == '`') return lexString('`'); // raw/template string
     if (std::isalpha(c) || c == '_') return lexIdentOrKeyword();

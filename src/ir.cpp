@@ -219,7 +219,7 @@ RegId IRBuilder::emitFieldPtr(RegId base, uint32_t idx, IRType fieldTy) {
     return inst.dest;
 }
 
-RegId IRBuilder::emitCast(Opcode castOp, RegId val, IRType from, IRType to) {
+RegId IRBuilder::emitCast(Opcode castOp, RegId val, IRType /*from*/, IRType to) {
     return emit(castOp, to, {val});
 }
 
@@ -756,7 +756,7 @@ public:
                 if (instCount > threshold_) continue;
                 // Inline: remap registers by offset and splice instructions
                 RegId regBase = fn.nextReg;
-                fn.nextReg += callee->nextReg + 1;
+                fn.nextReg += static_cast<RegId>(callee->nextReg + 1);
                 auto remap = [&](RegId r) -> RegId {
                     return r == REG_NONE ? REG_NONE : r + regBase;
                 };
@@ -901,7 +901,10 @@ public:
         bool changed = false;
         std::unordered_map<RegId, int64_t> constInts;
         for (auto& blk : fn.blocks) {
-            for (auto& inst : blk.insts) {
+            // Use index loop + deferred inserts to avoid iterator invalidation
+            std::vector<std::pair<size_t, Instruction>> deferred_inserts;
+            for (size_t _ii = 0; _ii < blk.insts.size(); ++_ii) {
+                Instruction& inst = blk.insts[_ii];
                 if (inst.op == Opcode::ConstInt) constInts[inst.dest] = inst.immInt;
                 if (inst.operands.size() != 2) continue;
                 RegId l = inst.operands[0], r = inst.operands[1];
@@ -954,6 +957,10 @@ public:
                     inst.op = Opcode::Select; inst.operands = {c, l, l}; changed = true;
                 }
             }
+            // Apply deferred insertions in reverse to preserve indices
+            for (auto it2 = deferred_inserts.rbegin(); it2 != deferred_inserts.rend(); ++it2) {
+                blk.insts.insert(blk.insts.begin() + (std::ptrdiff_t)it2->first, it2->second);
+            }
         }
         return changed;
     }
@@ -967,7 +974,10 @@ public:
         bool changed = false;
         std::unordered_map<RegId, int64_t> constMap;
         for (auto& blk : fn.blocks) {
-            for (auto& inst : blk.insts) {
+            // Use index loop + deferred inserts to avoid iterator invalidation
+            std::vector<std::pair<size_t, Instruction>> deferred_inserts;
+            for (size_t _ii = 0; _ii < blk.insts.size(); ++_ii) {
+                Instruction& inst = blk.insts[_ii];
                 if (inst.op == Opcode::ConstInt) { constMap[inst.dest] = inst.immInt; continue; }
                 if (inst.operands.size() != 2) continue;
                 RegId l = inst.operands[0], r = inst.operands[1];
@@ -991,6 +1001,10 @@ public:
                 }
                 // not(not(x)) → x  (double negation)
                 // handled by checking if l comes from a Not instruction
+            }
+            // Apply deferred insertions in reverse to preserve indices
+            for (auto it2 = deferred_inserts.rbegin(); it2 != deferred_inserts.rend(); ++it2) {
+                blk.insts.insert(blk.insts.begin() + (std::ptrdiff_t)it2->first, it2->second);
             }
         }
         return changed;
@@ -1151,7 +1165,7 @@ public:
             std::vector<Instruction> unrolled;
             for (int64_t iter = 0; iter < bound; ++iter) {
                 RegId regBase = fn.nextReg;
-                fn.nextReg += bodyBlk.insts.size() * 2 + 10;
+                fn.nextReg += static_cast<RegId>(bodyBlk.insts.size() * 2 + 10);
                 // Emit a const for the iteration index
                 Instruction iterConst;
                 iterConst.op = Opcode::ConstInt; iterConst.dest = regBase;
@@ -1306,7 +1320,10 @@ public:
         // Pattern: (x + C1) + C2 → x + (C1+C2)
         std::unordered_map<RegId, std::pair<RegId,int64_t>> addConst; // dest → (nonConstOp, constVal)
         for (auto& blk : fn.blocks) {
-            for (auto& inst : blk.insts) {
+            // Use index loop + deferred inserts to avoid iterator invalidation
+            std::vector<std::pair<size_t, Instruction>> deferred_inserts;
+            for (size_t _ii = 0; _ii < blk.insts.size(); ++_ii) {
+                Instruction& inst = blk.insts[_ii];
                 if (inst.op != Opcode::Add || inst.operands.size() != 2) continue;
                 RegId l = inst.operands[0], r = inst.operands[1];
                 bool lc = constMap.count(l), rc = constMap.count(r);
@@ -1326,12 +1343,16 @@ public:
                     newConst.type = inst.type;
                     fn.regTypes[newConst.dest] = inst.type;
                     constMap[newConst.dest] = c1 + c2;
-                    blk.insts.insert(std::find(blk.insts.begin(), blk.insts.end(), inst), newConst);
+                    deferred_inserts.push_back({_ii, newConst});
                     inst.operands[0] = innerOp;
                     inst.operands[1] = newConst.dest;
                     addConst[inst.dest] = {innerOp, c1 + c2};
                     changed = true;
                 }
+            }
+            // Apply deferred insertions in reverse to preserve indices
+            for (auto it2 = deferred_inserts.rbegin(); it2 != deferred_inserts.rend(); ++it2) {
+                blk.insts.insert(blk.insts.begin() + (std::ptrdiff_t)it2->first, it2->second);
             }
         }
         return changed;

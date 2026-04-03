@@ -752,7 +752,7 @@ PatPtr Parser::parseStructPat(const std::string& name) {
 }
 
 // ─── Expressions ─────────────────────────────────────────────────────────────
-ExprPtr Parser::parseExpr(int minPrec) {
+ExprPtr Parser::parseExpr(int /*minPrec*/) {
     auto lhs = parsePrefix();
     return parsePostfix(std::move(lhs));
 }

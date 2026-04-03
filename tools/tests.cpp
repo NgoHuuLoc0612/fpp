@@ -1,6 +1,16 @@
 // F++ Test Suite — tools/tests.cpp
 // Comprehensive tests for the entire F++ pipeline
 
+#ifdef _WIN32
+#  ifndef _USE_MATH_DEFINES
+#    define _USE_MATH_DEFINES
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "../include/lexer.hpp"
 #include "../include/parser.hpp"
 #include "../include/types.hpp"

@@ -1,5 +1,15 @@
 #pragma once
+#ifdef _WIN32
+#  ifndef _USE_MATH_DEFINES
+#    define _USE_MATH_DEFINES
+#  endif
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  define _CRT_SECURE_NO_WARNINGS
+#endif
 #include "types.hpp"
+#include "ir.hpp"
 #include <memory>
 #include <vector>
 #include <unordered_map>

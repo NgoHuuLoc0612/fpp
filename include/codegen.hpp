@@ -58,6 +58,7 @@ private:
     std::unique_ptr<ir::IRBuilder> builder_;
     ValueEnv                env_;
     std::vector<LoopContext> loopStack_;
+    std::unordered_map<std::string, ir::IRType> fnReturnTypes_;
 
     // ── Top-level code generation ─────────────────────────────────────────
     void genModule(const ast::Module& mod);
@@ -124,7 +125,7 @@ private:
     // ── Utilities ─────────────────────────────────────────────────────────
     ir::RegId   load(ir::RegId ptr, ir::IRType ty);
     void        store(ir::RegId val, ir::RegId ptr);
-    ir::RegId   alloca(ir::IRType ty, const std::string& name = "");
+    ir::RegId   emitAlloca(ir::IRType ty, const std::string& name = "");
     std::string mangle(const std::string& name, const std::string& ns = "");
     ir::RegId   coerce(ir::RegId val, ir::IRType from, ir::IRType to);
     void        pushLoop(LoopContext ctx) { loopStack_.push_back(ctx); }

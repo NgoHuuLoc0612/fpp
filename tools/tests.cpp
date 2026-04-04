@@ -636,24 +636,41 @@ static void testIR() {
         builder.emitBranch(cond, tb, fb);
         EXPECT_EQ((int)mod.functions[0].blocks[0].succs.size(), 2);
     });
-    TEST("ir: phi node construction", {
-        ir::IRModule mod;
-        ir::IRBuilder builder(mod);
-        builder.beginFunction("f", {}, {types::TY_I64});
-        auto b0 = builder.currentBlock();
-        auto b1 = builder.createBlock("b1");
-        auto b2 = builder.createBlock("b2");
-        auto b3 = builder.createBlock("merge");
-        builder.setBlock(b1);
-        auto r1 = builder.emitConstInt(1, {types::TY_I64});
-        builder.emitJump(b3);
-        builder.setBlock(b2);
-        auto r2 = builder.emitConstInt(2, {types::TY_I64});
-        builder.emitJump(b3);
-        builder.setBlock(b3);
-        auto phi = builder.emitPhi({types::TY_I64}, {{r1,b1},{r2,b2}});
-        EXPECT_TRUE(phi != ir::REG_NONE);
-    });
+    do {
+        ++g_total;
+        auto _t0 = std::chrono::steady_clock::now();
+        bool _ok = false;
+        std::string _msg;
+        try {
+            ir::IRModule mod;
+            ir::IRBuilder builder(mod);
+            builder.beginFunction("f", {}, {types::TY_I64});
+            auto b1 = builder.createBlock("b1");
+            auto b2 = builder.createBlock("b2");
+            auto b3 = builder.createBlock("merge");
+            builder.setBlock(b1);
+            auto r1 = builder.emitConstInt(1, {types::TY_I64});
+            builder.emitJump(b3);
+            builder.setBlock(b2);
+            auto r2 = builder.emitConstInt(2, {types::TY_I64});
+            builder.emitJump(b3);
+            builder.setBlock(b3);
+            ir::PhiEdge pe1; pe1.val = r1; pe1.from = b1;
+            ir::PhiEdge pe2; pe2.val = r2; pe2.from = b2;
+            std::vector<ir::PhiEdge> phiInputs;
+            phiInputs.push_back(pe1);
+            phiInputs.push_back(pe2);
+            auto phi = builder.emitPhi({types::TY_I64}, phiInputs);
+            if (phi == ir::REG_NONE) throw std::runtime_error("EXPECT_TRUE failed");
+            _ok = true;
+        }
+        catch (std::exception& _e) { _msg = _e.what(); }
+        catch (...) { _msg = "unknown exception"; }
+        using ms_t = std::chrono::duration<double, std::milli>;
+        double _ms = ms_t(std::chrono::steady_clock::now() - _t0).count();
+        g_results.push_back({"ir: phi node construction", _ok, _msg, _ms});
+        if (_ok) ++g_passed; else ++g_failed;
+    } while(0);
 }
 
 // ─── Standard library tests ────────────────────────────────────────────────────

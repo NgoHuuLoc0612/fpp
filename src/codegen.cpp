@@ -586,8 +586,11 @@ void CodeGenerator::genImpl(const ast::ImplItem& impl) {
             if (!traitName.empty()) mangledName = traitName + "::" + mangledName;
 
             // Synthesise a thin FnItem with the mangled name and emit it
-            ast::FnItem proxy = *fn;
-            proxy.name = mangledName;
+            // FnItem is not copyable (contains unique_ptr members), so we
+            // temporarily rename via const_cast and restore afterwards.
+            ast::FnItem* mutableFn = const_cast<ast::FnItem*>(fn);
+            std::string originalName = mutableFn->name;
+            mutableFn->name = mangledName;
             // If the method has a self parameter, prepend it as a pointer param
             if (fn->selfParam && !typeName.empty()) {
                 ir::IRType selfTy = toIRTypeByName(typeName);
@@ -595,7 +598,8 @@ void CodeGenerator::genImpl(const ast::ImplItem& impl) {
                 selfTy.isPtr = true;
                 // self is already listed in params via the parser for methods
             }
-            genFn(proxy);
+            genFn(*mutableFn);
+            mutableFn->name = originalName;
         } else {
             genStmt(*m);
         }
@@ -641,9 +645,11 @@ void CodeGenerator::genClass(const ast::ClassItem& cls) {
     env_.pushScope();
     for (auto& m : cls.members) {
         if (auto* fn = dynamic_cast<const ast::FnItem*>(m.get())) {
-            ast::FnItem proxy = *fn;
-            proxy.name = cls.name + "::" + fn->name;
-            genFn(proxy);
+            ast::FnItem* mutableFn = const_cast<ast::FnItem*>(fn);
+            std::string originalName = mutableFn->name;
+            mutableFn->name = cls.name + "::" + fn->name;
+            genFn(*mutableFn);
+            mutableFn->name = originalName;
         } else {
             genStmt(*m);
         }

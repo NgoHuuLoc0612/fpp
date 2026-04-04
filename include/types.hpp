@@ -98,6 +98,8 @@ struct Type {
     size_t alignBytes = 1;
     // Pointer mutability
     bool isMut = false;
+    // Visibility
+    bool isPublic = false;
 
     // Explicit copy operations (needed because unique_ptr<FnSig> disables implicit copy)
     Type() = default;
@@ -108,7 +110,7 @@ struct Type {
         , params(o.params), args(o.args), inner(o.inner)
         , elems(o.elems), elemTy(o.elemTy), arrayLen(o.arrayLen)
         , traits(o.traits), sizeBytes(o.sizeBytes), alignBytes(o.alignBytes)
-        , isMut(o.isMut)
+        , isMut(o.isMut), isPublic(o.isPublic)
     {
         if (o.sig) sig = std::make_unique<FnSig>(*o.sig);
     }
@@ -118,7 +120,7 @@ struct Type {
         params = o.params; args = o.args; inner = o.inner;
         elems = o.elems; elemTy = o.elemTy; arrayLen = o.arrayLen;
         traits = o.traits; sizeBytes = o.sizeBytes; alignBytes = o.alignBytes;
-        isMut = o.isMut;
+        isMut = o.isMut; isPublic = o.isPublic;
         sig = o.sig ? std::make_unique<FnSig>(*o.sig) : nullptr;
         return *this;
     }
